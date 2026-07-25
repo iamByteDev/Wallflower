@@ -35,6 +35,16 @@ Regenerate the app icon from `icon.png`:
 make icon && make
 ```
 
+## Lock Screen
+
+Wallflower includes a companion screen saver that shows your wallpaper on the lock screen.
+
+```bash
+cd ScreenSaver && make install
+```
+
+Then go to **System Settings > Screen Saver** and select **Wallflower**. Set it to show on lock screen. The screen saver reads the same wallpaper you set in the desktop app.
+
 ## Controls
 
 | Action | Shortcut |
