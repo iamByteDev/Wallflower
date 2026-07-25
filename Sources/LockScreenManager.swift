@@ -210,14 +210,10 @@ final class LockScreenManager {
     /// Best-effort attempt to set the lock screen wallpaper.
     /// Tries all available approaches in order of reliability.
     ///
-    /// 1. If the image is static, try `setDesktopImageURL` (sandbox-safe).
-    /// 2. If the Wallflower screen saver is installed, activate it.
-    /// 3. If root privileges are available, write the lock screen cache.
-    /// 4. Otherwise, open System Settings for the user.
-    ///
-    /// - Parameters:
-    ///   - imageURL: Optional static image to use (if nil, only screen saver is attempted).
-    ///   - requestPrivileges: If `true`, prompts the user for root access.
+    /// 1. Activate the Wallflower screen saver (works for all wallpaper types).
+    /// 2. If the wallpaper is a static image, also call `setDesktopImageURL`
+    ///    (sandbox-safe, may cascade to lock screen on some macOS versions).
+    /// 3. If root privileges are requested and granted, write the lock screen cache.
     static func applyLockScreen(
         imageURL: URL? = nil,
         requestPrivileges: Bool = false
@@ -230,19 +226,30 @@ final class LockScreenManager {
             activateScreenSaver()
         }
 
-        if let imageURL = imageURL,
-           FileManager.default.fileExists(atPath: imageURL.path) {
-            setDesktopWallpaper(imageURL: imageURL)
+        guard let url = imageURL,
+              FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
 
-            if requestPrivileges,
-               let auth = promptForPrivileges() {
-                writeLockScreenCache(imageURL: imageURL, authorization: auth)
+        let isStaticImage = isImageFile(url)
+
+        if isStaticImage {
+            setDesktopWallpaper(imageURL: url)
+        }
+
+        if requestPrivileges,
+           let auth = promptForPrivileges() {
+            if isStaticImage {
+                writeLockScreenCache(imageURL: url, authorization: auth)
+            } else {
+                writeVideoSnapshotToLockScreen(videoURL: url, authorization: auth)
             }
         }
+    }
 
-        if !saverInstalled {
-            openScreenSaverPreferences()
-        }
+    private static func isImageFile(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["png", "jpg", "jpeg", "heic", "tiff", "bmp", "webp"].contains(ext)
     }
 
     // MARK: - Privilege Escalation

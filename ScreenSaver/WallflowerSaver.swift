@@ -70,6 +70,19 @@ final class WallflowerSaverView: ScreenSaverView {
     }
 
     private func savedWallpaperURL() -> URL? {
+        let sharedPath = NSHomeDirectory()
+            + "/Library/Application Support/Wallflower/current-wallpaper.txt"
+
+        if let content = try? String(contentsOfFile: sharedPath, encoding: .utf8) {
+            let path = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !path.isEmpty {
+                let url = URL(fileURLWithPath: path)
+                if FileManager.default.fileExists(atPath: url.path) {
+                    return url
+                }
+            }
+        }
+
         let defaults = UserDefaults.standard
         guard let paths = defaults.stringArray(forKey: "wallflowerWallpapers"),
               !paths.isEmpty else { return nil }

@@ -170,7 +170,21 @@ final class WallpaperEngine {
             wc.loadWallpaper(at: url)
         }
         applyStoredSettings()
+        shareWallpaperPath(url)
         LockScreenManager.applyLockScreen(imageURL: url, requestPrivileges: false)
+    }
+
+    private func shareWallpaperPath(_ url: URL) {
+        let dir = NSHomeDirectory() + "/Library/Application Support/Wallflower"
+        try? FileManager.default.createDirectory(
+            atPath: dir,
+            withIntermediateDirectories: true
+        )
+        try? url.path.write(
+            toFile: dir + "/current-wallpaper.txt",
+            atomically: true,
+            encoding: .utf8
+        )
     }
 
     private func uniqueID(for screen: NSScreen) -> String {
