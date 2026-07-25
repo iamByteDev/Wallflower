@@ -5,21 +5,16 @@ final class VideoWallpaperView: NSView, WallpaperViewProtocol {
 
     private var player: AVPlayer?
     private var playerLayer: AVPlayerLayer?
-    private var looper: NSObject?
     private var _currentURL: URL?
     private var _hasAudio: Bool = true
+    private var _isPlaying: Bool = false
+    private var playbackObserver: NSKeyValueObservation?
 
-    var isPlaying: Bool {
-        player?.rate ?? 0 > 0
-    }
+    var isPlaying: Bool { _isPlaying }
 
-    var hasAudio: Bool {
-        _hasAudio
-    }
+    var hasAudio: Bool { _hasAudio }
 
-    var currentURL: URL? {
-        _currentURL
-    }
+    var currentURL: URL? { _currentURL }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -42,16 +37,20 @@ final class VideoWallpaperView: NSView, WallpaperViewProtocol {
 
     func load(contentsOf url: URL) {
         _currentURL = url
+        _isPlaying = false
 
         player?.pause()
         playerLayer?.removeFromSuperlayer()
-        looper = nil
+        playbackObserver?.invalidate()
+        playbackObserver = nil
 
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
-        player = AVPlayer(playerItem: playerItem)
+        let newPlayer = AVPlayer(playerItem: playerItem)
 
-        playerLayer = AVPlayerLayer(player: player)
+        player = newPlayer
+
+        playerLayer = AVPlayerLayer(player: newPlayer)
         playerLayer?.videoGravity = .resizeAspectFill
         playerLayer?.frame = bounds
 
@@ -61,23 +60,27 @@ final class VideoWallpaperView: NSView, WallpaperViewProtocol {
         }
 
         _hasAudio = asset.tracks(withMediaType: .audio).count > 0
-        setupLooping()
+        setupLooping(for: playerItem)
 
-        if let window = window, !window.isVisible {
-            return
-        }
+        configurePlayerItem(playerItem, url: url)
         play()
     }
 
     func play() {
-        player?.play()
+        _isPlaying = true
+        guard let p = player, p.currentItem?.status == .readyToPlay else {
+            return
+        }
+        p.play()
     }
 
     func pause() {
+        _isPlaying = false
         player?.pause()
     }
 
     func stop() {
+        _isPlaying = false
         player?.pause()
         player?.seek(to: .zero)
     }
@@ -90,18 +93,47 @@ final class VideoWallpaperView: NSView, WallpaperViewProtocol {
         player?.rate = rate
     }
 
-    private func setupLooping() {
+    private func setupLooping(for item: AVPlayerItem) {
         NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: player?.currentItem,
-            queue: .main
-        ) { [weak self] _ in
-            self?.player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
-            self?.player?.play()
+            self,
+            selector: #selector(playerItemDidEnd(_:)),
+            name: .AVPlayerItemDidPlayToEndTime,
+            object: item
+        )
+    }
+
+    @objc private func playerItemDidEnd(_ notification: Notification) {
+        guard let player = player else { return }
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            guard let self = self, finished, self._isPlaying else { return }
+            self.player?.play()
         }
     }
 
+    private func configurePlayerItem(_ item: AVPlayerItem, url: URL) {
+        playbackObserver = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
+            switch item.status {
+            case .readyToPlay:
+                if self?._isPlaying == true {
+                    self?.player?.play()
+                }
+            case .failed:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    self?.reloadCurrent()
+                }
+            default:
+                break
+            }
+        }
+    }
+
+    private func reloadCurrent() {
+        guard let url = _currentURL else { return }
+        load(contentsOf: url)
+    }
+
     deinit {
+        playbackObserver?.invalidate()
         NotificationCenter.default.removeObserver(self)
         player?.pause()
         playerLayer?.removeFromSuperlayer()

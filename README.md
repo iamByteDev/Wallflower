@@ -24,9 +24,13 @@ Supports video, HTML/Web, GIF, and static image wallpapers across multiple monit
 
 ## Lock Screen
 
-Wallflower includes a wallpaper extension (`.appex`) that integrates with macOS Sequoia's native wallpaper system. Your wallpaper automatically appears on the lock screen — no screen saver needed.
+Wallflower includes a companion screen saver. It reads your current wallpaper and plays it on the lock screen.
 
-The extension is built and embedded automatically. On macOS 15+, open **System Settings > Wallpaper** and Wallflower will be available as a wallpaper source.
+```bash
+cd ScreenSaver && make install
+```
+
+Then go to **System Settings > Screen Saver** and select **Wallflower**.
 
 ## Build
 
