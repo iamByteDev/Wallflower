@@ -1,6 +1,5 @@
 import AppKit
 import AVFoundation
-import Security
 import Foundation
 
 /// Manages the macOS lock screen wallpaper through multiple approaches.
@@ -98,56 +97,48 @@ final class LockScreenManager {
 
     // MARK: - Approach 3: Lock Screen Cache (requires root)
 
-    /// Writes an image directly to the lock screen cache at
-    /// `/Library/Caches/Desktop Pictures/{userUUID}/lockscreen.png`.
-    ///
-    /// **Requires root privileges.** Use `promptForPrivileges()` to obtain
-    /// an `AuthorizationRef`, then pass it here.
-    ///
-    /// - Parameters:
-    ///   - imageURL: File URL to an image file.
-    ///   - auth: An `AuthorizationRef` obtained via `promptForPrivileges()`.
-    /// - Returns: `true` if the write succeeded.
+    /// Writes an image directly to the lock screen cache.
+    /// Prompts for administrator credentials via AppleScript.
     @discardableResult
-    static func writeLockScreenCache(
-        imageURL: URL,
-        authorization auth: AuthorizationRef
-    ) -> Bool {
+    static func writeLockScreenCache(imageURL: URL) -> Bool {
         guard let userUUID = currentUserUUID() else { return false }
         guard let imageData = try? Data(contentsOf: imageURL) else { return false }
 
         let cacheDir = "/Library/Caches/Desktop Pictures/\(userUUID)"
         let cacheFile = "\(cacheDir)/lockscreen.png"
 
-        let createDir = """
-            mkdir -p "\(cacheDir)" && \
-            chown "$(stat -f '%Su' /dev/console):_securityagent" "\(cacheDir)" && \
-            chmod 750 "\(cacheDir)"
-            """
+        let script = """
+        do shell script "
+            mkdir -p '\(cacheDir)' &&
+            chown \\"$(stat -f '%Su' /dev/console)\\":_securityagent '\(cacheDir)' &&
+            chmod 750 '\(cacheDir)'
+        " with administrator privileges
+        """
 
-        let writeFile = """
-            cat > "\(cacheFile)" && \
-            chown "$(stat -f '%Su' /dev/console):_securityagent" "\(cacheFile)" && \
-            chmod 640 "\(cacheFile)"
-            """
+        guard runAppleScript(script) else { return false }
 
-        return executePrivileged(createDir, auth: auth)
-            && executePrivilegedWithInput(writeFile, input: imageData, auth: auth)
+        let tmpFile = "/tmp/wallflower_lockscreen_\(UUID().uuidString)"
+        guard FileManager.default.createFile(atPath: tmpFile, contents: imageData) else {
+            return false
+        }
+
+        let writeScript = """
+        do shell script "
+            cp '\(tmpFile)' '\(cacheFile)' &&
+            chown \\"$(stat -f '%Su' /dev/console)\\":_securityagent '\(cacheFile)' &&
+            chmod 640 '\(cacheFile)' &&
+            rm -f '\(tmpFile)'
+        " with administrator privileges
+        """
+
+        let result = runAppleScript(writeScript)
+        try? FileManager.default.removeItem(atPath: tmpFile)
+        return result
     }
 
-    /// Extracts a frame from a video URL and writes it to the lock screen cache.
-    /// This is a static snapshot — the lock screen won't animate, but at least
-    /// shows the wallpaper content.
-    ///
-    /// - Parameters:
-    ///   - videoURL: File URL to a video file.
-    ///   - auth: An `AuthorizationRef`.
-    /// - Returns: `true` if the write succeeded.
+    /// Extracts a frame from a video and writes it to the lock screen cache.
     @discardableResult
-    static func writeVideoSnapshotToLockScreen(
-        videoURL: URL,
-        authorization auth: AuthorizationRef
-    ) -> Bool {
+    static func writeVideoSnapshotToLockScreen(videoURL: URL) -> Bool {
         guard let userUUID = currentUserUUID() else { return false }
 
         let asset = AVAsset(url: videoURL)
@@ -156,36 +147,51 @@ final class LockScreenManager {
         generator.maximumSize = CGSize(width: 3840, height: 2160)
 
         var actualTime = CMTime.zero
+        let seekTime = asset.duration.seconds > 1
+            ? CMTime(seconds: 1, preferredTimescale: 600)
+            : .zero
+
         guard let cgImage = try? generator.copyCGImage(
-            at: asset.duration.seconds > 1 ? CMTime(seconds: 1, preferredTimescale: 600)
-                 : .zero,
+            at: seekTime,
             actualTime: &actualTime
         ) else { return false }
 
         let rep = NSBitmapImageRep(cgImage: cgImage)
         rep.size = NSSize(width: cgImage.width, height: cgImage.height)
-        guard let pngData = rep.representation(
-            using: .png,
-            properties: [:]
-        ) else { return false }
+        guard let pngData = rep.representation(using: .png, properties: [:]) else {
+            return false
+        }
 
         let cacheDir = "/Library/Caches/Desktop Pictures/\(userUUID)"
         let cacheFile = "\(cacheDir)/lockscreen.png"
 
-        let createDir = """
-            mkdir -p "\(cacheDir)" && \
-            chown "$(stat -f '%Su' /dev/console):_securityagent" "\(cacheDir)" && \
-            chmod 750 "\(cacheDir)"
-            """
+        let mkdirScript = """
+        do shell script "
+            mkdir -p '\(cacheDir)' &&
+            chown \\"$(stat -f '%Su' /dev/console)\\":_securityagent '\(cacheDir)' &&
+            chmod 750 '\(cacheDir)'
+        " with administrator privileges
+        """
 
-        let writeFile = """
-            cat > "\(cacheFile)" && \
-            chown "$(stat -f '%Su' /dev/console):_securityagent" "\(cacheFile)" && \
-            chmod 640 "\(cacheFile)"
-            """
+        guard runAppleScript(mkdirScript) else { return false }
 
-        return executePrivileged(createDir, auth: auth)
-            && executePrivilegedWithInput(writeFile, input: pngData, auth: auth)
+        let tmpFile = "/tmp/wallflower_lockscreen_\(UUID().uuidString)"
+        guard FileManager.default.createFile(atPath: tmpFile, contents: pngData) else {
+            return false
+        }
+
+        let writeScript = """
+        do shell script "
+            cp '\(tmpFile)' '\(cacheFile)' &&
+            chown \\"$(stat -f '%Su' /dev/console)\\":_securityagent '\(cacheFile)' &&
+            chmod 640 '\(cacheFile)' &&
+            rm -f '\(tmpFile)'
+        " with administrator privileges
+        """
+
+        let result = runAppleScript(writeScript)
+        try? FileManager.default.removeItem(atPath: tmpFile)
+        return result
     }
 
     // MARK: - Approach 4: System Settings (user-guided)
@@ -237,12 +243,11 @@ final class LockScreenManager {
             setDesktopWallpaper(imageURL: url)
         }
 
-        if requestPrivileges,
-           let auth = promptForPrivileges() {
+        if requestPrivileges {
             if isStaticImage {
-                writeLockScreenCache(imageURL: url, authorization: auth)
+                writeLockScreenCache(imageURL: url)
             } else {
-                writeVideoSnapshotToLockScreen(videoURL: url, authorization: auth)
+                writeVideoSnapshotToLockScreen(videoURL: url)
             }
         }
     }
@@ -250,61 +255,6 @@ final class LockScreenManager {
     private static func isImageFile(_ url: URL) -> Bool {
         let ext = url.pathExtension.lowercased()
         return ["png", "jpg", "jpeg", "heic", "tiff", "bmp", "webp"].contains(ext)
-    }
-
-    // MARK: - Privilege Escalation
-
-    /// Prompts the user for administrator credentials and returns an
-    /// `AuthorizationRef` that can execute privileged commands.
-    ///
-    /// - Parameter message: Explanation shown in the auth dialog.
-    /// - Returns: An `AuthorizationRef`, or `nil` if the user cancelled or
-    ///   authorization failed.
-    static func promptForPrivileges(
-        message: String = "Wallflower needs administrator access to update the lock screen wallpaper."
-    ) -> AuthorizationRef? {
-        var authRef: AuthorizationRef?
-        let status = AuthorizationCreate(
-            nil,
-            nil,
-            [],
-            &authRef
-        )
-
-        guard status == errAuthorizationSuccess, let auth = authRef else {
-            return nil
-        }
-
-        let flags: AuthorizationFlags = [
-            .interactionAllowed,
-            .extendRights,
-            .preAuthorize,
-        ]
-
-        let authStatus = "system.privilege.admin".withCString { namePtr in
-            var item = AuthorizationItem(
-                name: namePtr,
-                valueLength: 0,
-                value: nil,
-                flags: 0
-            )
-            return withUnsafeMutablePointer(to: &item) { itemPtr in
-                var rights = AuthorizationRights(count: 1, items: itemPtr)
-                return AuthorizationCopyRights(
-                    auth,
-                    &rights,
-                    nil,
-                    flags,
-                    nil
-                )
-            }
-        }
-
-        guard authStatus == errAuthorizationSuccess else {
-            return nil
-        }
-
-        return auth
     }
 
     // MARK: - Utilities
@@ -331,46 +281,12 @@ final class LockScreenManager {
         return nil
     }
 
-    /// Returns the path to the current user's lock screen cache directory.
-    static var lockScreenCacheDirectory: String? {
-        guard let uuid = currentUserUUID() else { return nil }
-        return "/Library/Caches/Desktop Pictures/\(uuid)"
-    }
-
-    /// Returns the full path to the lock screen image file.
-    static var lockScreenImagePath: String? {
-        guard let dir = lockScreenCacheDirectory else { return nil }
-        return "\(dir)/lockscreen.png"
-    }
-
     // MARK: - Private Helpers
 
-    private static func executePrivileged(
-        _ command: String,
-        auth: AuthorizationRef
-    ) -> Bool {
-        let script = "do shell script \"\(command)\" with administrator privileges"
+    private static func runAppleScript(_ source: String) -> Bool {
         var error: NSDictionary?
-        if let appleScript = NSAppleScript(source: script) {
-            appleScript.executeAndReturnError(&error)
-        }
+        guard let script = NSAppleScript(source: source) else { return false }
+        script.executeAndReturnError(&error)
         return error == nil
-    }
-
-    private static func executePrivilegedWithInput(
-        _ command: String,
-        input: Data,
-        auth: AuthorizationRef
-    ) -> Bool {
-        let tmpFile = "/tmp/wallflower_lockscreen_temp_\(UUID().uuidString)"
-        guard FileManager.default.createFile(
-            atPath: tmpFile,
-            contents: input
-        ) else { return false }
-
-        let fullCommand = "cat \(tmpFile) | \(command); rm -f \(tmpFile)"
-        let result = executePrivileged(fullCommand, auth: auth)
-        try? FileManager.default.removeItem(atPath: tmpFile)
-        return result
     }
 }

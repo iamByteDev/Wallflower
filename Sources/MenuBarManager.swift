@@ -185,22 +185,31 @@ final class MenuBarManager: NSObject {
     }
 
     @objc private func grantLockScreenAccess() {
-        guard let auth = LockScreenManager.promptForPrivileges() else {
+        let currentURL = engine?.getWindowControllers().first?.wallpaperView?.currentURL
+
+        guard let url = currentURL else {
             let alert = NSAlert()
-            alert.messageText = "Root access declined"
-            alert.informativeText = "Without administrator access, Wallflower can only use the Screen Saver for the lock screen. Go to System Settings > Screen Saver and select Wallflower."
+            alert.messageText = "No wallpaper loaded"
+            alert.informativeText = "Open a wallpaper first, then grant lock screen access."
             alert.runModal()
             return
         }
 
-        let currentURL = engine?.getWindowControllers().first?.wallpaperView?.currentURL
-        if let url = currentURL {
-            let ext = url.pathExtension.lowercased()
-            if ["mp4", "mov", "m4v", "mkv", "webm", "avi"].contains(ext) {
-                LockScreenManager.writeVideoSnapshotToLockScreen(videoURL: url, authorization: auth)
-            } else {
-                LockScreenManager.writeLockScreenCache(imageURL: url, authorization: auth)
-            }
+        let ext = url.pathExtension.lowercased()
+        let isVideo = ["mp4", "mov", "m4v", "mkv", "webm", "avi"].contains(ext)
+        let success: Bool
+
+        if isVideo {
+            success = LockScreenManager.writeVideoSnapshotToLockScreen(videoURL: url)
+        } else {
+            success = LockScreenManager.writeLockScreenCache(imageURL: url)
+        }
+
+        if !success {
+            let alert = NSAlert()
+            alert.messageText = "Lock screen update failed"
+            alert.informativeText = "Administrator access was denied or the write failed. Try System Settings > Screen Saver instead."
+            alert.runModal()
         }
     }
 
