@@ -28,6 +28,8 @@ final class WallpaperEngine {
 
         reconcileScreens()
 
+        LockScreenManager.activateScreenSaver()
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleSleep),
@@ -168,6 +170,7 @@ final class WallpaperEngine {
             wc.loadWallpaper(at: url)
         }
         applyStoredSettings()
+        LockScreenManager.applyLockScreen(imageURL: url, requestPrivileges: false)
     }
 
     private func uniqueID(for screen: NSScreen) -> String {

@@ -78,6 +78,16 @@ final class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        let lockScreenItem = NSMenuItem(
+            title: "Grant Lock Screen Access",
+            action: #selector(grantLockScreenAccess),
+            keyEquivalent: ""
+        )
+        lockScreenItem.target = self
+        menu.addItem(lockScreenItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let settingsItem = NSMenuItem(
             title: "Settings...",
             action: #selector(openSettings),
@@ -172,6 +182,26 @@ final class MenuBarManager: NSObject {
 
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+
+    @objc private func grantLockScreenAccess() {
+        guard let auth = LockScreenManager.promptForPrivileges() else {
+            let alert = NSAlert()
+            alert.messageText = "Root access declined"
+            alert.informativeText = "Without administrator access, Wallflower can only use the Screen Saver for the lock screen. Go to System Settings > Screen Saver and select Wallflower."
+            alert.runModal()
+            return
+        }
+
+        let currentURL = engine?.getWindowControllers().first?.wallpaperView?.currentURL
+        if let url = currentURL {
+            let ext = url.pathExtension.lowercased()
+            if ["mp4", "mov", "m4v", "mkv", "webm", "avi"].contains(ext) {
+                LockScreenManager.writeVideoSnapshotToLockScreen(videoURL: url, authorization: auth)
+            } else {
+                LockScreenManager.writeLockScreenCache(imageURL: url, authorization: auth)
+            }
+        }
     }
 
     func updatePlayPauseTitle() {
