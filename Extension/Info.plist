@@ -5,22 +5,25 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>WallflowerSaver</string>
+	<string>WallflowerWallpaperExtension</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.wallflower.screensaver</string>
+	<string>com.wallflower.app.wallpaper-extension</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Wallflower</string>
+	<string>Wallflower Wallpaper</string>
 	<key>CFBundlePackageType</key>
-	<string>BNDL</string>
+	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>EXAppExtensionAttributes</key>
+	<dict>
+		<key>EXExtensionPointIdentifier</key>
+		<string>com.apple.wallpaper</string>
+	</dict>
 	<key>LSMinimumSystemVersion</key>
-	<string>11.0</string>
-	<key>NSPrincipalClass</key>
-	<string>WallflowerSaverView</string>
+	<string>15.0</string>
 </dict>
 </plist>

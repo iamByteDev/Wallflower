@@ -18,8 +18,15 @@ Supports video, HTML/Web, GIF, and static image wallpapers across multiple monit
 
 ## Requirements
 
-- macOS 11 (Big Sur) or later
+- **Desktop wallpaper:** macOS 11 (Big Sur) or later
+- **Lock screen wallpaper:** macOS 15 (Sequoia) or later
 - Apple Silicon or Intel
+
+## Lock Screen
+
+Wallflower includes a wallpaper extension (`.appex`) that integrates with macOS Sequoia's native wallpaper system. Your wallpaper automatically appears on the lock screen — no screen saver needed.
+
+The extension is built and embedded automatically. On macOS 15+, open **System Settings > Wallpaper** and Wallflower will be available as a wallpaper source.
 
 ## Build
 
@@ -34,16 +41,6 @@ Regenerate the app icon from `icon.png`:
 ```bash
 make icon && make
 ```
-
-## Lock Screen
-
-Wallflower includes a companion screen saver that shows your wallpaper on the lock screen.
-
-```bash
-cd ScreenSaver && make install
-```
-
-Then go to **System Settings > Screen Saver** and select **Wallflower**. Set it to show on lock screen. The screen saver reads the same wallpaper you set in the desktop app.
 
 ## Controls
 

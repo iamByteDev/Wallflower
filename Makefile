@@ -4,6 +4,8 @@ EXEC = $(BUNDLE)/Contents/MacOS/Wallflower
 PLIST = $(BUNDLE)/Contents/Info.plist
 ICON = $(BUNDLE)/Contents/Resources/AppIcon.icns
 SRC_ICON = Resources/AppIcon.icns
+EXT_BUNDLE = Extension/WallflowerWallpaperExtension.appex
+EXT_DIR = $(BUNDLE)/Contents/Extensions
 
 FRAMEWORKS = \
 	-framework AppKit \
@@ -17,15 +19,23 @@ FRAMEWORKS = \
 SWIFTC = swiftc
 SWIFT_FLAGS = -O -target $(shell uname -m)-apple-macos11.0
 
-.PHONY: all build clean run debug icon
+.PHONY: all build clean run debug icon extension
 
 all: build
 
-build: $(EXEC) $(PLIST) $(ICON)
+build: extension $(EXEC) $(PLIST) $(ICON)
+	@echo "Build complete: $(BUNDLE)"
+
+extension:
+	@$(MAKE) -C Extension all
+	@mkdir -p $(EXT_DIR)
+	@cp -R $(EXT_BUNDLE) $(EXT_DIR)/
+	@echo "Extension embedded"
 
 $(EXEC): $(SOURCES)
 	@mkdir -p $(BUNDLE)/Contents/MacOS
 	@mkdir -p $(BUNDLE)/Contents/Resources
+	@mkdir -p $(EXT_DIR)
 	$(SWIFTC) $(SWIFT_FLAGS) $(FRAMEWORKS) -o $(EXEC) $(SOURCES)
 
 $(PLIST): Resources/Info.plist
@@ -35,7 +45,6 @@ $(PLIST): Resources/Info.plist
 $(ICON): $(SRC_ICON)
 	@mkdir -p $(BUNDLE)/Contents/Resources
 	cp $(SRC_ICON) $(ICON)
-	@echo "Build complete: $(BUNDLE)"
 
 icon:
 	@rm -rf tmp.iconset
@@ -50,8 +59,11 @@ icon:
 
 debug: SWIFT_FLAGS = -g -Onone -target $(shell uname -m)-apple-macos11.0
 debug: $(SOURCES)
+	@$(MAKE) -C Extension all
 	@mkdir -p $(BUNDLE)/Contents/MacOS
 	@mkdir -p $(BUNDLE)/Contents/Resources
+	@mkdir -p $(EXT_DIR)
+	@cp -R $(EXT_BUNDLE) $(EXT_DIR)/
 	$(SWIFTC) $(SWIFT_FLAGS) $(FRAMEWORKS) -o $(EXEC) $(SOURCES)
 	cp Resources/Info.plist $(PLIST)
 	@if [ -f $(SRC_ICON) ]; then cp $(SRC_ICON) $(ICON); fi
@@ -59,6 +71,7 @@ debug: $(SOURCES)
 
 clean:
 	rm -rf $(BUNDLE)
+	@$(MAKE) -C Extension clean
 
 run: build
 	open $(BUNDLE)
